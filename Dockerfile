@@ -21,17 +21,14 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh
 # Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Create non-root user 'coder'
-RUN useradd -m -s /bin/bash coder \
-    && echo "coder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/coder
+# Grant passwordless sudo to built-in 'ubuntu' user and fix home directory permissions
+RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/ubuntu \
+    && mkdir -p /home/ubuntu/workspace \
+    && chown -R ubuntu:ubuntu /home/ubuntu
 
-# Create workspace and adjust permissions
-RUN mkdir -p /home/coder/workspace && chown -R coder:coder /home/coder
-
-USER coder
-WORKDIR /home/coder/workspace
+USER ubuntu
+WORKDIR /home/ubuntu/workspace
 
 EXPOSE 8080
 
-# Configure code-server to use password auth via environment variable
-ENTRYPOINT ["code-server", "--bind-addr", "0.0.0.0:8080", "--auth", "password", "/home/coder/workspace"]
+ENTRYPOINT ["code-server", "--bind-addr", "0.0.0.0:8080", "--auth", "password", "/home/ubuntu/workspace"]

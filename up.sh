@@ -77,8 +77,8 @@ docker run -d \
   --name "${CONTAINER_NAME}" \
   -p "${PORT}:8080" \
   -e PASSWORD="${PASSWORD}" \
-  -v "${VOLUME_NAME}:/home/coder" \
-  -v "${HOME}/Projects:/home/coder/workspace" \
+  -v "${VOLUME_NAME}:/home/ubuntu" \
+  -v "${HOME}/Projects:/home/ubuntu/workspace" \
   "${IMAGE_NAME}" >/dev/null
 
 echo "--------------------------------------------------------"
