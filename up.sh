@@ -8,24 +8,23 @@ VOLUME_NAME="claude_coder_home"
 
 FORCE_REBUILD=false
 
-# Parse command line flags
-for arg in "$@"; do
-  case $arg in
+# Parse command line flags properly
+while [[ $# -gt 0 ]]; do
+  case $1 in
     --rebuild|-r)
       FORCE_REBUILD=true
       shift
       ;;
     *)
+      shift
       ;;
   esac
 done
 
-# Function to fetch the PASSWORD environment variable using jq
 get_container_password() {
   docker inspect "${CONTAINER_NAME}" | jq -r '.[0].Config.Env[] | select(startswith("PASSWORD=")) | split("=")[1]' 2>/dev/null || true
 }
 
-# Function to stop and remove container
 cleanup_container() {
   if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     echo "Stopping and removing existing container '${CONTAINER_NAME}'..."
@@ -34,7 +33,6 @@ cleanup_container() {
   fi
 }
 
-# Handle Force Rebuild Flag
 if [ "$FORCE_REBUILD" = true ]; then
   echo "Force rebuild flag detected."
   cleanup_container
@@ -42,13 +40,11 @@ if [ "$FORCE_REBUILD" = true ]; then
   docker build -t "${IMAGE_NAME}" .
 fi
 
-# Build image if it doesn't exist yet
 if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
   echo "Image '${IMAGE_NAME}' does not exist. Building image..."
   docker build -t "${IMAGE_NAME}" .
 fi
 
-# Check if container is already running
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
   ACTIVE_PASS=$(get_container_password)
   echo "--------------------------------------------------------"
@@ -59,7 +55,6 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
   exit 0
 fi
 
-# Check if container exists but is stopped
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
   echo "Container '${CONTAINER_NAME}' exists but is stopped. Starting it..."
   docker start "${CONTAINER_NAME}" >/dev/null
@@ -72,14 +67,14 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
   exit 0
 fi
 
-# Generate a random password if not supplied in environment
 PASSWORD="${PASSWORD:-$(openssl rand -base64 12)}"
 
-# Run a fresh container
+# Ensure local host directory exists before mounting
+mkdir -p "${HOME}/Projects"
+
 echo "Starting new container '${CONTAINER_NAME}'..."
 docker run -d \
   --name "${CONTAINER_NAME}" \
-  --user "$(id -u):$(id -g)" \
   -p "${PORT}:8080" \
   -e PASSWORD="${PASSWORD}" \
   -v "${VOLUME_NAME}:/home/coder" \

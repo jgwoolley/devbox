@@ -1,9 +1,7 @@
 FROM ubuntu:24.04
 
-# Prevent interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install base dependencies, Node.js repository, and build tools
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -17,21 +15,23 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install code-server (VS Code in the browser)
+# Install code-server
 RUN curl -fsSL https://code-server.dev/install.sh | sh
 
-# Install Claude Code globally via npm
+# Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Create a non-root user 'coder' with sudo privileges
+# Create non-root user 'coder'
 RUN useradd -m -s /bin/bash coder \
     && echo "coder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/coder
+
+# Create workspace and adjust permissions
+RUN mkdir -p /home/coder/workspace && chown -R coder:coder /home/coder
 
 USER coder
 WORKDIR /home/coder/workspace
 
-# Expose port 8080 for web-based VS Code
 EXPOSE 8080
 
-# Launch code-server bound to all interfaces
-CMD ["code-server", "--bind-addr", "0.0.0.0:8080", "/home/coder/workspace"]
+# Configure code-server to use password auth via environment variable
+ENTRYPOINT ["code-server", "--bind-addr", "0.0.0.0:8080", "--auth", "password", "/home/coder/workspace"]
