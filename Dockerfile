@@ -63,19 +63,6 @@ RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings
     && apt-get update && apt-get install -y docker-ce-cli docker-compose-plugin docker-buildx-plugin \
     && rm -rf /var/lib/apt/lists/*
 
-# Apache NiFi Toolkit (check the NiFi downloads page and set the current version)
-ARG NIFI_VERSION=2.12.0
-RUN curl -fsSL --retry 5 --retry-delay 5 --connect-timeout 30 --max-time 900 \
-      "https://dlcdn.apache.org/nifi/${NIFI_VERSION}/nifi-toolkit-${NIFI_VERSION}-bin.zip" \
-      -o /tmp/nifi-toolkit.zip \
-    && unzip -q /tmp/nifi-toolkit.zip -d /opt \
-    && ln -s "/opt/nifi-toolkit-${NIFI_VERSION}" /opt/nifi-toolkit \
-    && chmod -R a+rX "/opt/nifi-toolkit-${NIFI_VERSION}" \
-    && chmod a+x "/opt/nifi-toolkit-${NIFI_VERSION}/bin/*.sh" \
-    && ln -s /opt/nifi-toolkit/bin/cli.sh /usr/local/bin/nifi-toolkit \
-    && rm /tmp/nifi-toolkit.zip
-ENV NIFI_TOOLKIT_HOME=/opt/nifi-toolkit
-
 # Install .NET 10 SDK via Microsoft's official install script (system-wide)
 ENV DOTNET_ROOT=/usr/share/dotnet
 RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
@@ -91,7 +78,9 @@ RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/ubuntu \
     && mkdir -p /home/ubuntu/workspace \
     && chown -R ubuntu:ubuntu /home/ubuntu
 # SDKMAN lives outside /home/ubuntu: that path is a mounted volume (see up.sh) which would hide it
-RUN mkdir -p /opt/sdkman && chown ubuntu:ubuntu /opt/sdkman
+ENV NIFI_TOOLKIT_HOME=/opt/nifi-toolkit
+RUN mkdir -p /opt/sdkman "${NIFI_TOOLKIT_HOME}" && chown ubuntu:ubuntu /opt/sdkman "${NIFI_TOOLKIT_HOME}" \
+    && ln -s "${NIFI_TOOLKIT_HOME}/bin/cli.sh" /usr/local/bin/nifi-toolkit
 
 USER ubuntu
 WORKDIR /home/ubuntu/workspace
@@ -99,7 +88,7 @@ WORKDIR /home/ubuntu/workspace
 # SDKMAN-managed tools are on PATH for every shell (RUN steps, Claude Code, terminals),
 # not just interactive shells that source sdkman-init.sh.
 ENV SDKMAN_DIR=/opt/sdkman
-ENV PATH="${SDKMAN_DIR}/candidates/maven/current/bin:${SDKMAN_DIR}/candidates/gradle/current/bin:${NIFI_TOOLKIT_HOME}/bin:/home/ubuntu/.local/bin:/home/ubuntu/.dotnet/tools:${PATH}"
+ENV PATH="${SDKMAN_DIR}/candidates/maven/current/bin:${SDKMAN_DIR}/candidates/gradle/current/bin:/home/ubuntu/.local/bin:/home/ubuntu/.dotnet/tools:${PATH}"
 
 # SDKMAN + Maven + Gradle (unpinned = latest; pin with e.g. `sdk install maven 3.9.11`)
 RUN curl -fsSL "https://get.sdkman.io?rcupdate=false" | bash \
@@ -107,6 +96,19 @@ RUN curl -fsSL "https://get.sdkman.io?rcupdate=false" | bash \
     && echo 'sdkman_auto_env=false' >> "${SDKMAN_DIR}/etc/config" \
     && bash -c "source ${SDKMAN_DIR}/bin/sdkman-init.sh && sdk install maven && sdk install gradle" \
     && printf '\nexport SDKMAN_DIR="%s"\n[[ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ]] && source "$SDKMAN_DIR/bin/sdkman-init.sh"\n' "${SDKMAN_DIR}" >> /home/ubuntu/.bashrc
+
+# Apache NiFi Toolkit from Maven Central (set NIFI_VERSION to the current release).
+# Needs Maven, so it runs after the SDKMAN step; /opt/nifi-toolkit is pre-created and owned by ubuntu above.
+ARG NIFI_VERSION=2.12.0
+RUN tmp="$(mktemp -d)" && trap 'rm -rf "$tmp"' EXIT \
+    && mvn -B dependency:copy -Dmaven.wagon.http.retryHandler.count=5 \
+      "-Dartifact=org.apache.nifi:nifi-toolkit-assembly:${NIFI_VERSION}:zip:bin" \
+      "-DoutputDirectory=$tmp" \
+    && unzip -q "$tmp"/*.zip -d "$tmp/x" \
+    && cp -a "$tmp"/x/nifi-toolkit-*/. "${NIFI_TOOLKIT_HOME}/" \
+    && chmod -R a+rX "${NIFI_TOOLKIT_HOME}" \
+    && chmod a+x "${NIFI_TOOLKIT_HOME}"/bin/*.sh
+ENV PATH="${NIFI_TOOLKIT_HOME}/bin:${PATH}"
 
 # Pre-fetch pnpm so the first `pnpm` call doesn't need the network.
 # Projects with a "packageManager" field in package.json still get their pinned version.
