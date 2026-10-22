@@ -1,0 +1,51 @@
+# code-server behind Traefik.
+#
+#   ./up.sh        # or: PASSWORD=... docker compose up -d --build
+#
+# devbox: http://code.localhost:8080   (host port is HTTP_PORT; hostname is DEVBOX_HOST)
+# *.localhost resolves to 127.0.0.1 in most browsers and on most Linux systems; if it does not on yours,
+# add a hosts entry (127.0.0.1 code.localhost) or pick another name via DEVBOX_HOST.
+# Other containers can join this stack's network and add traefik.* labels to get their own hostname.
+
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: devbox-traefik
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --log.level=INFO
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      # read-only, but the Docker socket is still powerful: dev use only
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  devbox:
+    build: .
+    image: claude-vscode-ubuntu
+    container_name: claude-browser-ubuntu
+    environment:
+      PASSWORD: ${PASSWORD:?set PASSWORD in your shell or a .env file}
+    volumes:
+      - claude_coder_home:/home/ubuntu
+      - ${HOME}/Projects:/home/ubuntu/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    # The socket's group ID differs per host: DOCKER_GID=$(stat -c %g /var/run/docker.sock)
+    group_add:
+      - "${DOCKER_GID:-999}"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.devbox.rule=Host(`${DEVBOX_HOST:-code.localhost}`)
+      - traefik.http.routers.devbox.entrypoints=web
+      - traefik.http.services.devbox.loadbalancer.server.port=8080
+    depends_on:
+      - traefik
+    restart: unless-stopped
+
+volumes:
+  claude_coder_home:
+    # Reuse the volume created by earlier versions of up.sh
+    name: claude_coder_home

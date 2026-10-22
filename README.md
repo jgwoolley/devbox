@@ -34,7 +34,7 @@ Builds the image (if needed), starts the container, and prints the URL and a gen
 $ ./up.sh
 --------------------------------------------------------
 Container 'claude-browser-ubuntu' is already running.
-URL:      http://localhost:8080
+URL:      http://code.localhost:8080
 Password: XXXXXXXXXXXXXXXX
 --------------------------------------------------------
 ```
@@ -52,7 +52,7 @@ Building Docker image 'claude-vscode-ubuntu'...
 Starting new container 'claude-browser-ubuntu'...
 --------------------------------------------------------
 Setup complete!
-URL:      http://localhost:8080
+URL:      http://code.localhost:8080
 Password: XXXXXXXXXXXXXXXX
 --------------------------------------------------------
 ```
@@ -64,9 +64,8 @@ Password: XXXXXXXXXXXXXXXX
 
 ```console
 $ ./down.sh
-claude-browser-ubuntu
-claude-browser-ubuntu
-claude_coder_home
-Untagged: claude-vscode-ubuntu:latest
-Deleted: sha256:78586e41...
+[+] Running 3/3
+ ✔ Container claude-browser-ubuntu  Removed
+ ✔ Volume claude_coder_home         Removed
+ ✔ Image claude-vscode-ubuntu       Removed
 ```
